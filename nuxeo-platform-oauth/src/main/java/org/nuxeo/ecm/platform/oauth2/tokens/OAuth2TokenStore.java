@@ -17,10 +17,8 @@
  */
 package org.nuxeo.ecm.platform.oauth2.tokens;
 
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-
+import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.auth.oauth2.CredentialStore;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.ClientException;
@@ -30,8 +28,9 @@ import org.nuxeo.ecm.directory.Session;
 import org.nuxeo.ecm.directory.api.DirectoryService;
 import org.nuxeo.runtime.api.Framework;
 
-import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.oauth2.CredentialStore;
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
 
 public class OAuth2TokenStore implements CredentialStore {
 
@@ -113,7 +112,17 @@ public class OAuth2TokenStore implements CredentialStore {
         Session session = null;
         try {
             session = ds.open(DIRECTORY_NAME);
-            DocumentModel entry = session.createEntry(aToken.toMap());
+            // userId is primary key on CredentialStore
+            Map<String, Serializable> filter = new HashMap<String, Serializable>();
+            Map<String, Object> aTokenMap = aToken.toMap();
+            filter.put("serviceName", (String) aTokenMap.get("serviceName"));
+            filter.put("nuxeoLogin", (String) aTokenMap.get("nuxeoLogin"));
+            DocumentModelList entries = session.query(filter);
+            for(DocumentModel entry : entries) {
+                session.deleteEntry(entry);
+            }
+            // add token now that "serviceName" and "nuxeoLogin" are unique
+            DocumentModel entry = session.createEntry(aTokenMap);
             session.updateEntry(entry);
 
             return getToken(serviceName, aToken.getNuxeoLogin());
